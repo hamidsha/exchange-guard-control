@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card table-card"><div class="table-title"><div><p class="eyebrow">Signed agent work</p><h2>Command history</h2></div></div><div class="table-scroll"><table class="data-table"><thead><tr><th>Created</th><th>ID</th><th>Node</th><th>Type</th><th>Status</th><th>By</th><th>Payload</th><th>Error</th><th>Action</th></tr></thead><tbody>
+{% for c in commands %}<tr><td>{{ c.created_at }}</td><td><code>{{ c.id }}</code></td><td>{{ c.node_id }}</td><td>{{ c.command_type }}</td><td>{{ c.status.value }}</td><td>{{ c.created_by }}</td><td><code>{{ c.payload }}</code></td><td>{{ c.error or '-' }}</td><td>{% if user.role.value == 'admin' and c.status.value == 'pending' %}<form method="post" action="/commands/{{ c.id }}/cancel"><input type="hidden" name="csrf" value="{{ csrf_token }}"><button class="secondary">Cancel</button></form>{% endif %}</td></tr>{% else %}<tr><td colspan="9">No commands.</td></tr>{% endfor %}
+</tbody></table></div></div>
+{% endblock %}

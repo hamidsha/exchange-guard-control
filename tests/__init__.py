@@ -1,0 +1,2 @@
+"""Exchange Guard validation tests."""
+

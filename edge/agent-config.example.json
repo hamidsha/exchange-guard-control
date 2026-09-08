@@ -1,0 +1,13 @@
+{
+  "BaseUrl": "https://exchange-guard.example.internal",
+  "NodeId": "edge-01",
+  "SharedSecret": "REPLACE_WITH_BOOTSTRAP_NODE_SECRET",
+  "EventsPath": "C:\\ProgramData\\ExchangeGuardAgent\\events.jsonl",
+  "AdaptiveBlockerConfigPath": "C:\\ProgramData\\ExchangeGuardAgent\\standalone-state.json",
+  "AdaptiveBlockerScriptPath": "",
+  "AdaptiveBlockerTaskName": "",
+  "MaxEventLines": 500,
+  "AllowEnforceModeSwitch": false,
+  "AllowPrivateIpBlocks": false,
+  "AllowHttpForTesting": false
+}

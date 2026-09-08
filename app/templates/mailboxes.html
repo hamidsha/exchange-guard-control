@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-heading">
+  <div>
+    <p class="eyebrow">Exchange organization</p>
+    <p class="muted">Inventory, recipient-rate policies and controlled bulk changes from one place.</p>
+  </div>
+  {% if user.role.value == 'admin' %}
+  <form method="post" action="/mailboxes/sync">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <button class="secondary" {% if not mailbox_node_ready %}disabled{% endif %}>Sync from Exchange</button>
+  </form>
+  {% endif %}
+</div>
+
+{% if not mailbox_node_ready %}
+<div class="alert warning"><strong>Mailbox Agent is not configured.</strong> Add MAILBOX_NODE_SECRET and install the management agent before queuing changes.</div>
+{% endif %}
+
+<div class="stats compact-stats">
+  <div class="stat"><span>Filtered mailboxes</span><strong>{{ total }}</strong></div>
+  <div class="stat"><span>Known policies</span><strong>{{ policies|length }}</strong></div>
+  <div class="stat"><span>Explicit policy assignments</span><strong>{{ assigned_policy_count }}</strong></div>
+  <div class="stat"><span>Last inventory sync</span><strong class="stat-date">{{ latest_sync or 'Never' }}</strong></div>
+</div>
+
+<section class="card filter-card">
+  <form method="get" action="/mailboxes" class="filter-bar">
+    <label class="grow">Search
+      <input name="q" value="{{ filters.q }}" placeholder="Name, alias or email address">
+    </label>
+    <label>Current policy
+      <select name="policy">
+        <option value="">All policies</option>
+        <option value="__default__" {% if filters.policy == '__default__' %}selected{% endif %}>Organization default</option>
+        <option value="__assigned__" {% if filters.policy == '__assigned__' %}selected{% endif %}>Any explicit policy</option>
+        {% for p in policies %}<option value="{{ p.name }}" {% if filters.policy == p.name %}selected{% endif %}>{{ p.name }}</option>{% endfor %}
+      </select>
+    </label>
+    <label class="checkbox-label"><input type="checkbox" name="dotted" value="true" {% if filters.dotted %}checked{% endif %}> Dotted addresses only</label>
+    <button type="submit">Apply filters</button>
+    <a class="button ghost" href="/mailboxes">Reset</a>
+  </form>
+</section>
+
+{% if user.role.value == 'admin' %}
+<form method="post" action="/mailboxes/apply" id="mailbox-policy-form">
+  <input type="hidden" name="csrf" value="{{ csrf_token }}">
+  <input type="hidden" name="q" value="{{ filters.q }}">
+  <input type="hidden" name="current_policy" value="{{ filters.policy }}">
+  <input type="hidden" name="dotted" value="{{ 'true' if filters.dotted else 'false' }}">
+  <section class="card bulk-toolbar">
+    <div>
+      <strong>Assign throttling policy</strong>
+      <p class="muted small">Selected rows affect this page. Filtered scope affects all {{ total }} matching mailboxes.</p>
+    </div>
+    <label>Target policy
+      <select name="policy_name" required>
+        <option value="">Choose a policy…</option>
+        <option value="__default__">Organization default</option>
+        {% for p in policies if p.scope|lower == 'regular' %}
+          <option value="{{ p.name }}">{{ p.name }} · {{ p.recipient_rate_limit }} recipients/24h</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Scope
+      <select name="apply_scope" id="apply-scope">
+        <option value="selected">Selected rows</option>
+        <option value="filtered">All filtered ({{ total }})</option>
+      </select>
+    </label>
+    <label>Bulk confirmation
+      <input name="confirmation" placeholder="APPLY FILTERED">
+    </label>
+    <button type="submit" {% if not mailbox_node_ready %}disabled{% endif %}>Queue policy change</button>
+  </section>
+{% endif %}
+
+<section class="card table-card">
+  <div class="table-title"><div><h2>Mailboxes</h2><p class="muted">Page {{ page }} of {{ pages }}</p></div></div>
+  <div class="table-scroll">
+    <table class="data-table">
+      <thead><tr>
+        {% if user.role.value == 'admin' %}<th class="check-cell"><input type="checkbox" data-select-all aria-label="Select all on page"></th>{% endif %}
+        <th>Mailbox</th><th>Alias</th><th>Current policy</th><th>Rate</th><th>Desired</th><th>Last sync</th><th>State</th>
+      </tr></thead>
+      <tbody>
+      {% for m in mailboxes %}
+      <tr>
+        {% if user.role.value == 'admin' %}<td class="check-cell"><input type="checkbox" name="mailbox_ids" value="{{ m.id }}"></td>{% endif %}
+        <td><strong>{{ m.display_name or m.alias }}</strong><small>{{ m.primary_smtp_address }}</small></td>
+        <td>{{ m.alias }}</td>
+        <td><span class="badge neutral">{{ m.current_policy or 'Organization default' }}</span></td>
+        <td>{% set matched = policies|selectattr('name', 'equalto', m.current_policy)|list %}{{ matched[0].recipient_rate_limit if matched else '—' }}</td>
+        <td>{{ m.desired_policy or '—' }}</td>
+        <td class="nowrap">{{ m.last_synced_at }}</td>
+        <td>{% if m.last_error %}<span class="badge danger" title="{{ m.last_error }}">Failed</span>{% elif m.last_command_id and m.desired_policy != m.current_policy %}<span class="badge warning">Pending</span>{% else %}<span class="badge success">Synced</span>{% endif %}</td>
+      </tr>
+      {% else %}<tr><td colspan="8" class="empty-state">No mailboxes match these filters. Run an Exchange sync if this is the first setup.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <nav class="pagination">
+    {% if page > 1 %}<a class="button ghost" href="?q={{ filters.q }}&policy={{ filters.policy }}&dotted={{ filters.dotted }}&page={{ page - 1 }}">Previous</a>{% endif %}
+    <span>{{ page }} / {{ pages }}</span>
+    {% if page < pages %}<a class="button ghost" href="?q={{ filters.q }}&policy={{ filters.policy }}&dotted={{ filters.dotted }}&page={{ page + 1 }}">Next</a>{% endif %}
+  </nav>
+</section>
+{% if user.role.value == 'admin' %}</form>{% endif %}
+
+{% if user.role.value == 'admin' %}
+<section class="grid two policy-grid">
+  <div class="card">
+    <div class="section-heading"><div><p class="eyebrow">Policy editor</p><h2>Create or update Regular policy</h2></div></div>
+    <div class="alert warning small"><strong>Important:</strong> changing a policy changes the limit for every mailbox already assigned to it.</div>
+    <form method="post" action="/mailboxes/policies">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <label>Policy name<input name="name" placeholder="StandardUserLimit" required maxlength="256"></label>
+      <label>Recipient limit per 24 hours<input name="recipient_rate_limit" placeholder="500 or Unlimited" required></label>
+      <label>Confirm exact policy name<input name="confirmation" required></label>
+      <button type="submit" {% if not mailbox_node_ready %}disabled{% endif %}>Queue policy update</button>
+    </form>
+  </div>
+  <div class="card">
+    <div class="section-heading"><div><p class="eyebrow">Current inventory</p><h2>Throttling policies</h2></div></div>
+    <div class="table-scroll"><table><thead><tr><th>Name</th><th>Scope</th><th>Rate</th><th>Members</th></tr></thead><tbody>
+      {% for p in policies %}<tr><td><strong>{{ p.name }}</strong></td><td>{{ p.scope }}</td><td>{{ p.recipient_rate_limit }}</td><td>{{ policy_counts.get(p.name, 0) }}</td></tr>{% else %}<tr><td colspan="4">No policy inventory yet.</td></tr>{% endfor %}
+    </tbody></table></div>
+  </div>
+</section>
+{% endif %}
+
+<script>
+document.querySelector('[data-select-all]')?.addEventListener('change', function () {
+  document.querySelectorAll('input[name="mailbox_ids"]').forEach((box) => { box.checked = this.checked; });
+});
+</script>
+{% endblock %}

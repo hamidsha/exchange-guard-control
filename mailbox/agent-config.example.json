@@ -1,0 +1,8 @@
+{
+  "BaseUrl": "https://exchange-guard.example.internal",
+  "NodeId": "mailbox-01",
+  "SharedSecret": "REPLACE_WITH_MAILBOX_NODE_SECRET",
+  "ExchangePowerShellUri": "http://exchange.example.com/PowerShell/",
+  "AllowHttpForTesting": false,
+  "SyncInventoryEveryRun": false
+}

@@ -1,0 +1,100 @@
+name: validation
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate local configuration
+        run: |
+          chmod +x scripts/*.sh
+          ./scripts/generate-env.sh
+
+      - name: Validate shell and Python syntax
+        run: |
+          bash -n scripts/*.sh
+          python -m compileall -q app integrations/mysql tests
+
+      - name: Validate compose models
+        run: |
+          docker compose config --quiet
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.tracking-mysql.yml \
+            config --quiet
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.mysql-socket.yml \
+            config --quiet
+
+      - name: Build web image
+        run: docker compose build web
+
+      - name: Run empty-state application smoke test
+        run: |
+          docker compose run --rm --no-deps \
+            -e DATABASE_URL=sqlite+pysqlite:////tmp/exchange-guard-smoke.sqlite \
+            -e ADMIN_USERNAME=smoke-admin \
+            -e ADMIN_PASSWORD=smoke-password \
+            -e TRUSTED_HOSTS=testserver,localhost,127.0.0.1 \
+            -e REPUTATION_ENABLED=false \
+            -e OUTBOUND_MONITOR_ENABLED=false \
+            -e INBOUND_SPOOF_MONITOR_ENABLED=false \
+            -e TELEGRAM_ENABLED=false \
+            web python -m tests.smoke_test
+
+      - name: Start clean stack with optional tracking database
+        run: |
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.tracking-mysql.yml \
+            up -d
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8787/healthz; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.tracking-mysql.yml \
+            logs
+          exit 1
+
+      - name: Verify tracking schema
+        run: |
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.tracking-mysql.yml \
+            exec -T tracking-db sh -lc \
+            'mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" -Nse "SHOW TABLES LIKE '\''GetMessageTrackingLog'\'';"' \
+            | grep -Fx GetMessageTrackingLog
+
+      - name: Reject generated secret files
+        run: |
+          git diff --exit-code
+          test -z "$(git status --short --untracked-files=all)"
+
+      - name: Show logs on failure
+        if: failure()
+        run: |
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.tracking-mysql.yml \
+            logs --tail=300
+
+      - name: Stop disposable test stack
+        if: always()
+        run: |
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.tracking-mysql.yml \
+            down -v

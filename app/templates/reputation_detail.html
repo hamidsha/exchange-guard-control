@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="stats">
+  <div class="stat"><strong>{{ record.risk_score }}</strong><span>Risk score</span></div>
+  <div class="stat"><strong>{{ record.risk_level }}</strong><span>Risk level</span></div>
+  <div class="stat"><strong>{{ record.inbound_count }}</strong><span>Inbound</span></div>
+  <div class="stat"><strong>{{ record.outbound_count }}</strong><span>Outbound</span></div>
+</div>
+<div class="card"><h2>Recommendation</h2><p><span class="badge risk-{{ record.risk_level }}">{{ record.recommendation }}</span></p><ul>{% for reason in record.reasons %}<li>{{ reason }}</li>{% else %}<li>No strong reputation signals.</li>{% endfor %}</ul></div>
+<section class="grid two">
+<div class="card"><h2>Block domain</h2><form method="post" action="/reputation/{{ record.id }}/block"><input type="hidden" name="csrf" value="{{ csrf_token }}"><label>Edge node<select name="node_id">{% for n in nodes %}<option value="{{ n.id }}">{{ n.id }}</option>{% endfor %}</select></label><label>Scope<select name="scope"><option value="subdomains">Domain + subdomains</option><option value="exact">Exact domain only</option></select></label><button class="danger" type="submit">Queue block</button></form></div>
+<div class="card"><h2>Decision</h2><form method="post" action="/reputation/{{ record.id }}/dismiss" class="inline-form"><input type="hidden" name="csrf" value="{{ csrf_token }}"><input name="reason" value="Reviewed and dismissed"><button class="secondary" type="submit">Dismiss</button></form><form method="post" action="/reputation/{{ record.id }}/allowlist" class="inline-form"><input type="hidden" name="csrf" value="{{ csrf_token }}"><input name="comment" value="Trusted domain"><button type="submit">Allowlist</button></form></div>
+</section>
+<div class="card"><h2>Observed data</h2><table><tr><th>Domain</th><td>{{ record.domain }}</td></tr><tr><th>Source IPs</th><td>{{ record.source_ips|join(', ') or '-' }}</td></tr><tr><th>First seen</th><td>{{ record.first_seen_at or '-' }}</td></tr><tr><th>Last seen</th><td>{{ record.last_seen_at or '-' }}</td></tr><tr><th>Checked</th><td>{{ record.checked_at or '-' }}</td></tr><tr><th>Status</th><td>{{ record.status.value }}</td></tr></table></div>
+<div class="card"><h2>Provider evidence</h2><pre>{{ record.provider_results | tojson(indent=2) }}</pre></div>
+{% endblock %}

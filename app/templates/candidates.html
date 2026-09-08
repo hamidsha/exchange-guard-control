@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card table-card">
+<div class="table-title"><div><p class="eyebrow">Adaptive blocker</p><h2>Review candidates</h2></div></div><div class="table-scroll"><table class="data-table"><thead><tr><th>Last seen</th><th>IP</th><th>Domain</th><th>Messages</th><th>Recipients</th><th>Avg SCL</th><th>Hits</th><th>Status</th><th>Action</th></tr></thead><tbody>
+{% for c in candidates %}
+<tr>
+<td>{{ c.last_seen_at }}</td><td><a href="/candidates/{{ c.id }}">{{ c.client_ip }}</a></td><td>{{ c.sender_domain }}</td><td>{{ c.message_count }}</td><td>{{ c.unique_recipient_count }}</td><td>{{ c.average_scl if c.average_scl is not none else '-' }}</td><td>{{ c.consecutive_hits }}</td><td>{{ c.status.value }}</td>
+<td>
+{% if user.role.value == 'admin' and c.status.value == 'open' %}
+<form method="post" action="/candidates/{{ c.id }}/approve" class="inline-form">
+<input type="hidden" name="csrf" value="{{ csrf_token }}"><input type="number" name="duration_hours" value="24" min="1" max="720"><button type="submit">Approve block</button>
+</form>
+<form method="post" action="/candidates/{{ c.id }}/dismiss" class="inline-form">
+<input type="hidden" name="csrf" value="{{ csrf_token }}"><input name="reason" value="False positive"><button class="secondary" type="submit">Dismiss</button>
+</form>
+{% else %}-{% endif %}
+</td>
+</tr>
+{% else %}<tr><td colspan="9">No candidates.</td></tr>{% endfor %}
+</tbody></table></div>
+</div>
+{% endblock %}

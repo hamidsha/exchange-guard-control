@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-heading">
+  <div>
+    <p class="eyebrow">Own-domain impersonation</p>
+    <p class="muted">Public IPs that submitted inbound mail using {{ scan.organization_domains }} sender addresses. Results are cached and refreshed every {{ scan.interval_minutes }} minutes.</p>
+  </div>
+  {% if user.role.value == 'admin' %}
+  <form method="post" action="/spoofing/scan">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <button class="secondary" type="submit">Scan now</button>
+  </form>
+  {% endif %}
+</div>
+
+<div class="alert warning">
+  <strong>Interpretation:</strong> an accepted <code>RECEIVE</code> event means Edge accepted and forwarded the message into Exchange transport. It does not by itself prove Inbox delivery. Private IPs are excluded so internal UPS devices and DAG traffic do not appear here.
+  GeoIP is approximate. Add every authorized relay, website and shared-provider source to Trusted IPs; blocking an IP can also affect unrelated legitimate inbound mail from that provider.
+</div>
+
+{% if geo_policy.enabled %}
+<div class="alert {% if geo_policy.auto_block %}danger{% else %}scan-status{% endif %}">
+  <strong>GeoIP:</strong> enabled via {{ geo_policy.connection_mode }} connection; results are cached for {{ geo_policy.cache_days }} days and capped at {{ geo_policy.daily_lookup_cap }} lookups per UTC day.
+  {% if geo_policy.auto_block %}
+  Automatic enforcement is active: accepted spoof sources outside <code>{{ geo_policy.allowed_countries }}</code> are queued for a {{ geo_policy.block_hours }}-hour block, up to {{ geo_policy.max_per_scan }} new IPs per scan. Trusted IPs and unknown/failed GeoIP results are never auto-blocked.
+  {% else %}Automatic country blocking is disabled.{% endif %}
+</div>
+{% else %}
+<div class="alert warning"><strong>GeoIP is disabled.</strong> Country information and automatic country blocking are inactive.</div>
+{% endif %}
+
+<div class="stats compact-stats">
+  <a class="stat stat-link" href="/spoofing?state=open"><strong>{{ counts.suspicious_sources }}</strong><span>Untrusted accepted sources</span></a>
+  <div class="stat"><strong>{{ counts.accepted_messages }}</strong><span>Accepted spoofed messages</span></div>
+  <div class="stat"><strong>{{ counts.failed_messages }}</strong><span>Rejected / failed attempts</span></div>
+  <a class="stat stat-link" href="/spoofing?state=trusted"><strong>{{ counts.trusted_sources }}</strong><span>Trusted sources</span></a>
+  <a class="stat stat-link" href="/spoofing?state=blocked"><strong>{{ counts.blocked_sources }}</strong><span>Blocked sources</span></a>
+</div>
+
+{% if latest_run and latest_run.status == 'failed' %}
+<div class="alert danger"><strong>Last scan failed:</strong> {{ latest_run.error }}</div>
+{% elif latest_run %}
+<div class="alert scan-status">
+  Last scan: <strong>{{ latest_run.finished_at or latest_run.started_at }}</strong> ·
+  {{ latest_run.rows_read }} tracking rows · {{ latest_run.sources_seen }} public sources ·
+  {{ latest_run.lookback_hours }}-hour window
+</div>
+{% else %}
+<div class="alert scan-status">No spoofing scan has completed yet. The first scan backfills {{ scan.initial_lookback_days }} days; later scans use a lighter {{ scan.lookback_hours }}-hour window.</div>
+{% endif %}
+{% if latest_run and latest_run.rows_capped %}
+<div class="alert warning"><strong>Scan cap reached.</strong> The newest {{ latest_run.rows_read }} matching rows were analyzed. Increase <code>INBOUND_SPOOF_MAX_ROWS</code> only after checking MySQL load.</div>
+{% endif %}
+
+<div class="card filter-card">
+  <form method="get" action="/spoofing" class="filter-bar">
+    <label class="grow">Public IP search<input name="q" value="{{ filters.q }}" placeholder="198.51.100.25"></label>
+    <label>Risk
+      <select name="risk">
+        <option value="">All</option>
+        {% for value in ['critical','high','medium','low'] %}<option value="{{ value }}" {% if filters.risk == value %}selected{% endif %}>{{ value }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>State
+      <select name="state">
+        <option value="">All</option>
+        {% for value, label in [('open','Open'),('trusted','Trusted'),('blocked','Blocked'),('block_pending','Block pending'),('unblock_pending','Unblock pending')] %}<option value="{{ value }}" {% if filters.state == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+    </label>
+    <label class="checkbox-label"><input type="checkbox" name="history" value="true" {% if filters.history %}checked{% endif %}>Include older history</label>
+    <button type="submit">Apply filters</button>
+    <a class="button ghost" href="/spoofing">Reset</a>
+  </form>
+</div>
+
+<div class="card table-card">
+  <div class="table-title"><div><p class="eyebrow">Edge tracking evidence</p><h2>Detected public sources</h2></div></div>
+  <div class="table-scroll">
+    <table class="data-table spoof-table">
+      <thead><tr><th>Source IP</th><th>Country</th><th>State</th><th>Risk</th><th>Accepted</th><th>Failed</th><th>Identities</th><th>Evidence</th><th>Last seen UTC</th><th>Actions</th></tr></thead>
+      <tbody>
+      {% for item in rows %}
+      {% set r = item.record %}
+      <tr>
+        <td class="nowrap"><strong><code>{{ r.source_ip }}</code></strong>{% if not r.active %}<small>Outside current window</small>{% endif %}</td>
+        <td class="country-cell">
+          {% if item.geo and item.geo.lookup_status == 'success' %}
+            <span class="country-flag" title="{{ item.geo.country_code }}">{{ item.country_flag }}</span>
+            <strong>{{ item.geo.country_name }}</strong>
+            <small>{{ item.geo.country_code }}{% if item.geo.city %} · {{ item.geo.city }}{% endif %}</small>
+            {% if item.geo.isp %}<small>{{ item.geo.isp }}</small>{% endif %}
+          {% elif item.geo and item.geo.lookup_status == 'failed' %}
+            <span class="badge warning">lookup failed</span><small>{{ item.geo.error or 'GeoIP unavailable' }}</small>
+          {% else %}
+            <span class="country-flag">🌐</span><span class="muted">Pending lookup</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if item.state == 'trusted' %}<span class="badge success">trusted</span>
+          {% elif item.state == 'blocked' %}<span class="badge danger">blocked</span>
+          {% elif item.state == 'block_pending' %}<span class="badge warning">block pending</span>
+          {% elif item.state == 'unblock_pending' %}<span class="badge warning">unblock pending</span>
+          {% else %}<span class="badge neutral">open</span>{% endif %}
+          {% if item.trusted_entry and item.trusted_entry.comment %}<small>{{ item.trusted_entry.comment }}</small>{% endif %}
+        </td>
+        <td>{% if item.state == 'trusted' %}<span class="badge success">trusted profile</span>{% else %}<span class="badge risk-{{ r.risk_level }}">{{ r.risk_level }}</span>{% endif %}</td>
+        <td><strong>{{ r.accepted_messages }}</strong><small>{{ r.accepted_recipients }} recipient deliveries</small></td>
+        <td>{{ r.failed_messages }}</td>
+        <td>{{ r.unique_senders }} sender(s)<small>{{ r.unique_recipients }} recipient(s)</small></td>
+        <td>
+          <details class="evidence-details">
+            <summary>Show samples</summary>
+            <strong>Claimed senders</strong>
+            <ul>{% for value in r.sample_senders %}<li><code>{{ value }}</code></li>{% else %}<li>—</li>{% endfor %}</ul>
+            <strong>Recipients</strong>
+            <ul>{% for value in r.sample_recipients %}<li><code>{{ value }}</code></li>{% else %}<li>—</li>{% endfor %}</ul>
+            <strong>Subjects</strong>
+            <ul>{% for value in r.sample_subjects %}<li>{{ value }}</li>{% else %}<li>—</li>{% endfor %}</ul>
+          </details>
+        </td>
+        <td class="nowrap">{{ r.last_seen_at or '—' }}{% if r.last_accepted_at %}<small>Accepted: {{ r.last_accepted_at }}</small>{% endif %}</td>
+        <td class="action-cell">
+          {% if user.role.value != 'admin' %}View only
+          {% elif item.state == 'trusted' %}
+            <form method="post" action="/spoofing/{{ r.source_ip }}/untrust" class="inline-form"><input type="hidden" name="csrf" value="{{ csrf_token }}"><button class="secondary" type="submit">Remove trust</button></form>
+          {% else %}
+            {% if item.state == 'blocked' %}
+            <form method="post" action="/spoofing/{{ r.source_ip }}/unblock" class="inline-form"><input type="hidden" name="csrf" value="{{ csrf_token }}"><button class="secondary" type="submit">Unblock</button></form>
+            {% elif item.state not in ['block_pending','unblock_pending'] %}
+            <form method="post" action="/spoofing/{{ r.source_ip }}/block" class="inline-form action-form"><input type="hidden" name="csrf" value="{{ csrf_token }}"><select name="duration_hours" aria-label="Block duration"><option value="24">24 hours</option><option value="168">7 days</option><option value="720">30 days</option><option value="8760">1 year</option></select><button class="danger" type="submit">Block</button></form>
+            {% endif %}
+            <form method="post" action="/spoofing/{{ r.source_ip }}/trust" class="inline-form"><input type="hidden" name="csrf" value="{{ csrf_token }}"><input type="hidden" name="comment" value="Trusted from inbound spoofing review"><button class="secondary" type="submit">Trust &amp; unblock</button></form>
+            {% if geo_policy.auto_block and item.geo and item.geo.lookup_status == 'success' and item.geo.country_code not in geo_policy.allowed_country_codes %}<small>Use Trust &amp; unblock for a permanent exception from the country policy.</small>{% endif %}
+          {% endif %}
+          {% if item.pending %}<small>Command {{ item.pending.id[:8] }} · {{ item.pending.status.value }}</small>{% endif %}
+        </td>
+      </tr>
+      {% else %}<tr><td colspan="10" class="empty-state">No sources match this filter.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

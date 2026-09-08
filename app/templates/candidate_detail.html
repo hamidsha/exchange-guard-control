@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h2>{{ candidate.client_ip }} / {{ candidate.sender_domain }}</h2>
+  <div class="stats">
+    <div class="stat"><strong>{{ candidate.message_count }}</strong><span>Messages</span></div>
+    <div class="stat"><strong>{{ candidate.unique_recipient_count }}</strong><span>Unique recipients</span></div>
+    <div class="stat"><strong>{{ candidate.average_scl if candidate.average_scl is not none else '-' }}</strong><span>Average SCL</span></div>
+    <div class="stat"><strong>{{ candidate.consecutive_hits }}</strong><span>Consecutive hits</span></div>
+  </div>
+  <p><strong>Status:</strong> {{ candidate.status.value }} | <strong>Top subject:</strong> {{ candidate.top_subject or '-' }}</p>
+</div>
+<div class="card"><h2>Decision evidence</h2>
+<table><thead><tr><th>Time UTC</th><th>Action</th><th>Mode</th><th>Messages</th><th>Recipients</th><th>Avg SCL</th><th>Raw</th></tr></thead><tbody>
+{% for e in evidence %}<tr><td>{{ e.timestamp_utc }}</td><td>{{ e.action }}</td><td>{{ e.mode or '-' }}</td><td>{{ e.message_count or '-' }}</td><td>{{ e.unique_recipient_count or '-' }}</td><td>{{ e.average_scl if e.average_scl is not none else '-' }}</td><td><details><summary>JSON</summary><pre>{{ e.raw | tojson(indent=2) }}</pre></details></td></tr>{% else %}<tr><td colspan="7">No evidence events.</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

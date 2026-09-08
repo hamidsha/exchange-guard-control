@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>{{ title }} - {{ app_name }}</title>
+  <link rel="stylesheet" href="/static/app.css?v=0.10.2">
+  <link rel="stylesheet" href="/static/control-plane.css?v=0.10.2">
+</head>
+<body class="{{ 'app-page' if user else 'auth-page' }} {{ 'page-outbound' if request.url.path.startswith('/outbound') or request.url.path.startswith('/incidents') else '' }}">
+{% if user %}
+<div class="app-shell">
+  <aside class="sidebar" id="primary-sidebar">
+    <a class="brand" href="/">
+      <span class="brand-mark">EG</span>
+      <span><strong>Exchange Guard</strong><small>Security control plane</small></span>
+    </a>
+    <nav class="side-nav" aria-label="Primary navigation">
+      <div class="nav-group">
+        <span class="nav-label">Monitor</span>
+        <a class="{{ 'active' if request.url.path == '/' else '' }}" href="/">Overview</a>
+        <a class="{{ 'active' if request.url.path.startswith('/outbound') or request.url.path.startswith('/incidents') else '' }}" href="/outbound">Outbound</a>
+        <a class="{{ 'active' if request.url.path.startswith('/spoofing') else '' }}" href="/spoofing">Spoofing</a>
+        <a class="{{ 'active' if request.url.path.startswith('/candidates') else '' }}" href="/candidates">Candidates</a>
+        <a class="{{ 'active' if request.url.path.startswith('/reputation') else '' }}" href="/reputation">Reputation</a>
+      </div>
+      <div class="nav-group">
+        <span class="nav-label">Manage</span>
+        <a class="{{ 'active' if request.url.path.startswith('/mailboxes') else '' }}" href="/mailboxes">Mailboxes &amp; policies</a>
+        <a class="{{ 'active' if request.url.path.startswith('/blocks') else '' }}" href="/blocks">Blocks</a>
+        <a class="{{ 'active' if request.url.path.startswith('/allowlist') else '' }}" href="/allowlist">Allowlist</a>
+      </div>
+      <div class="nav-group">
+        <span class="nav-label">System</span>
+        <a class="{{ 'active' if request.url.path.startswith('/commands') else '' }}" href="/commands">Commands</a>
+        <a class="{{ 'active' if request.url.path.startswith('/nodes') else '' }}" href="/nodes">Nodes</a>
+        <a class="{{ 'active' if request.url.path.startswith('/audit') else '' }}" href="/audit">Audit</a>
+        <a class="{{ 'active' if request.url.path.startswith('/settings') else '' }}" href="/settings">Settings</a>
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <span class="user-avatar">{{ user.username[:1]|upper }}</span>
+      <div class="user-copy"><strong>{{ user.username }}</strong><small>{{ user.role.value|capitalize }}</small></div>
+      <form action="/logout" method="post">
+        <input type="hidden" name="csrf" value="{{ csrf_token }}">
+        <button class="link-button" type="submit">Sign out</button>
+      </form>
+    </div>
+  </aside>
+  <div class="sidebar-overlay" data-sidebar-close></div>
+  <section class="app-main">
+    <header class="workspace-bar">
+      <button class="sidebar-toggle" type="button" data-sidebar-toggle aria-controls="primary-sidebar" aria-expanded="false">Menu</button>
+      <div class="workspace-title"><p class="eyebrow">Exchange Guard</p><h1>{{ title }}</h1></div>
+      <div class="agent-strip" aria-label="Management agent status">
+        {% for node in shell_nodes %}
+        <a href="/nodes" class="agent-chip {{ 'online' if node.connected else 'offline' }}" title="Last seen: {{ node.last_seen_at or 'Never' }}">
+          <span class="status-dot"></span><span>{{ node.label }}</span><strong>{{ 'Online' if node.connected else 'Offline' }}</strong>
+        </a>
+        {% endfor %}
+      </div>
+    </header>
+    <main class="container">
+{% else %}
+<main class="auth-shell">
+  <section class="auth-brand"><span class="brand-mark">EG</span><strong>Exchange Guard</strong><small>Security control plane</small></section>
+  <section class="auth-panel">
+    <div class="title-row"><p class="eyebrow">Secure access</p><h1>{{ title }}</h1></div>
+{% endif %}
+{% if error %}<div class="alert danger">{{ error }}</div>{% endif %}
+{% block content %}{% endblock %}
+{% if user %}
+    </main>
+    <footer>Changes are executed only by signed management agents.</footer>
+  </section>
+</div>
+<script>
+(() => {
+  const root = document.documentElement;
+  const toggle = document.querySelector('[data-sidebar-toggle]');
+  const close = document.querySelector('[data-sidebar-close]');
+  const setOpen = (open) => {
+    root.classList.toggle('sidebar-open', open);
+    if (toggle) toggle.setAttribute('aria-expanded', String(open));
+  };
+  if (toggle) toggle.addEventListener('click', () => setOpen(!root.classList.contains('sidebar-open')));
+  if (close) close.addEventListener('click', () => setOpen(false));
+})();
+</script>
+{% else %}
+  </section>
+</main>
+{% endif %}
+</body>
+</html>

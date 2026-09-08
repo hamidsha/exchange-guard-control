@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card table-card"><div class="table-title"><div><p class="eyebrow">Accountability</p><h2>Operator activity</h2></div></div><div class="table-scroll"><table class="data-table"><thead><tr><th>Time UTC</th><th>Actor</th><th>Action</th><th>Target</th><th>Remote IP</th><th>Details</th></tr></thead><tbody>
+{% for l in logs %}<tr><td>{{ l.timestamp_utc }}</td><td>{{ l.actor }}</td><td>{{ l.action }}</td><td>{{ l.target or '-' }}</td><td>{{ l.remote_ip or '-' }}</td><td><code>{{ l.details or {} }}</code></td></tr>{% else %}<tr><td colspan="6">No audit entries.</td></tr>{% endfor %}
+</tbody></table></div></div>
+{% endblock %}

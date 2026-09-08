@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block content %}
+{% if user.role.value == 'admin' %}
+<section class="grid two">
+<div class="card"><h2>Manual IP block</h2>
+<form method="post" action="/blocks/ip">
+<input type="hidden" name="csrf" value="{{ csrf_token }}">
+<label>Node<select name="node_id">{% for n in nodes %}<option>{{ n.id }}</option>{% endfor %}</select></label>
+<label>IP address<input name="ip" placeholder="203.0.113.10" required></label>
+<label>Duration hours<input type="number" name="duration_hours" value="24" min="1" max="8760"></label>
+<label>Reason<input name="reason" required></label>
+<button type="submit">Queue IP block</button>
+</form></div>
+<div class="card"><h2>Manual IP unblock</h2>
+<form method="post" action="/blocks/ip/unblock">
+<input type="hidden" name="csrf" value="{{ csrf_token }}">
+<label>Node<select name="node_id">{% for n in nodes %}<option>{{ n.id }}</option>{% endfor %}</select></label>
+<label>IP address<input name="ip" required></label>
+<label>Reason<input name="reason" value="Manual unblock"></label>
+<button class="secondary" type="submit">Queue IP unblock</button>
+</form></div>
+<div class="card"><h2>Manual domain block</h2>
+<form method="post" action="/blocks/domain">
+<input type="hidden" name="csrf" value="{{ csrf_token }}">
+<label>Node<select name="node_id">{% for n in nodes %}<option>{{ n.id }}</option>{% endfor %}</select></label>
+<label>Domain<input name="domain" placeholder="example.com" required></label>
+<label>Scope<select name="scope"><option value="subdomains">Domain and all subdomains</option><option value="exact">Exact domain only</option></select></label>
+<label>Reason<input name="reason" required></label>
+<button type="submit">Queue domain block</button>
+</form></div>
+<div class="card"><h2>Manual domain unblock</h2>
+<form method="post" action="/blocks/domain/unblock">
+<input type="hidden" name="csrf" value="{{ csrf_token }}">
+<label>Node<select name="node_id">{% for n in nodes %}<option>{{ n.id }}</option>{% endfor %}</select></label>
+<label>Domain<input name="domain" required></label>
+<label>Scope<select name="scope"><option value="subdomains">Domain and all subdomains</option><option value="exact">Exact domain only</option></select></label>
+<label>Reason<input name="reason" value="Manual unblock"></label>
+<button class="secondary" type="submit">Queue domain unblock</button>
+</form></div>
+</section>
+{% endif %}
+<div class="card"><h2>Latest Edge snapshot</h2>
+{% if snapshot %}
+<p>Captured: {{ snapshot.captured_at }} on {{ snapshot.node_id }}</p>
+<h3>Active IP blocks</h3><pre>{{ snapshot.active_ip_blocks | tojson(indent=2) }}</pre>
+<h3>Blocked exact domains</h3><pre>{{ snapshot.blocked_domains | tojson(indent=2) }}</pre>
+<h3>Blocked domains and subdomains</h3><pre>{{ snapshot.blocked_domains_and_subdomains | tojson(indent=2) }}</pre>
+{% else %}<p>No snapshot received yet.</p>{% endif %}
+</div>
+<div class="card table-card"><div class="table-title"><div><p class="eyebrow">Enforcement history</p><h2>Recent block commands</h2></div></div>
+<div class="table-scroll"><table><thead><tr><th>Created</th><th>Type</th><th>Status</th><th>By</th><th>Payload</th><th>Error</th></tr></thead><tbody>
+{% for c in commands %}<tr><td>{{ c.created_at }}</td><td>{{ c.command_type }}</td><td>{{ c.status.value }}</td><td>{{ c.created_by }}</td><td><code>{{ c.payload }}</code></td><td>{{ c.error or '-' }}</td></tr>{% else %}<tr><td colspan="6">No commands.</td></tr>{% endfor %}
+</tbody></table></div></div>
+{% endblock %}

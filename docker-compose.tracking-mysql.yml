@@ -1,0 +1,33 @@
+services:
+  tracking-db:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${EXCHANGE_MYSQL_DATABASE:-exchange_monitoring}
+      MYSQL_USER: ${EXCHANGE_MYSQL_USER:-exchange_guard_tracking}
+      MYSQL_PASSWORD: ${EXCHANGE_MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${TRACKING_MYSQL_ROOT_PASSWORD}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+    volumes:
+      - exchange_guard_tracking_db:/var/lib/mysql
+      - ./integrations/mysql/schema.sql:/docker-entrypoint-initdb.d/10-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    networks: [exchange_guard]
+
+  web:
+    environment:
+      EXCHANGE_MYSQL_HOST: tracking-db
+      EXCHANGE_MYSQL_PORT: 3306
+      EXCHANGE_MYSQL_SOCKET: ""
+    depends_on:
+      tracking-db:
+        condition: service_healthy
+
+volumes:
+  exchange_guard_tracking_db:

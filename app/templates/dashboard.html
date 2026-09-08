@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="overview-intro">
+  <div>
+    <p class="eyebrow">Mail security operations</p>
+    <h2>Security overview</h2>
+    <p>Current outbound risk, response work and Exchange Guard service health in one view.</p>
+  </div>
+  <a class="button secondary" href="/outbound">Open outbound triage</a>
+</section>
+
+{% if outbound_alerts > 0 %}
+<a class="priority-alert" href="/outbound">
+  <span class="priority-alert-mark">!</span>
+  <span><strong>{{ outbound_alerts }} sender{{ '' if outbound_alerts == 1 else 's' }} need attention</strong><small>Review critical and high-risk outbound activity.</small></span>
+  <span class="priority-alert-action">Review now</span>
+</a>
+{% endif %}
+
+<section class="stats overview-stats">
+  <a class="stat stat-link" href="/outbound?risk=high"><span>Outbound alerts</span><strong>{{ outbound_alerts }}</strong><small>High or critical</small></a>
+  <a class="stat stat-link" href="/outbound#incidents"><span>Active incidents</span><strong>{{ active_incidents }}</strong><small>Pending response</small></a>
+  <a class="stat stat-link" href="/spoofing?state=open"><span>Inbound spoof sources</span><strong>{{ suspicious_spoof_sources }}</strong><small>Accepted and untrusted</small></a>
+  <a class="stat stat-link" href="/commands"><span>Pending commands</span><strong>{{ pending_commands }}</strong><small>Signed agent work</small></a>
+</section>
+
+<section class="overview-grid">
+  <section class="card overview-panel outbound-watch">
+    <div class="panel-head">
+      <div><p class="eyebrow">Detection</p><h2>Outbound risk</h2></div>
+      <a href="/outbound">View triage</a>
+    </div>
+    {% for record in top_outbound %}
+    <a class="watch-row" href="/outbound?q={{ record.sender }}">
+      <div class="watch-identity"><strong>{{ record.sender }}</strong><small>Last seen {{ record.last_seen_at or '—' }}</small></div>
+      <span class="badge risk-{{ record.risk_level }}">{{ record.risk_level }}</span>
+      <div class="watch-metric"><strong>{{ record.recipients_10m }}</strong><small>10m</small></div>
+      <div class="watch-metric"><strong>{{ record.recipients_1h }}</strong><small>1h</small></div>
+      <div class="watch-metric"><strong>{{ record.recipients_24h }}</strong><small>24h</small></div>
+    </a>
+    {% else %}
+    <div class="empty-state">No normal-user outbound activity is available yet.</div>
+    {% endfor %}
+  </section>
+
+  <aside class="overview-side">
+    <section class="card overview-panel">
+      <div class="panel-head"><div><p class="eyebrow">Response</p><h2>Active incidents</h2></div><a href="/outbound#incidents">View all</a></div>
+      <div class="overview-list">
+        {% for incident in dashboard_incidents %}
+        <a class="response-item urgent" href="/outbound#incidents">
+          <div class="response-copy"><strong>{{ incident.primary_smtp_address }}</strong><small>{{ incident.reason }}</small></div>
+          <span class="badge danger">{{ incident.status.value }}</span>
+        </a>
+        {% else %}
+        <div class="calm-state"><span class="status-dot"></span><div><strong>Response queue is clear</strong><small>No mailbox is currently quarantined.</small></div></div>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="card overview-panel">
+      <div class="panel-head"><div><p class="eyebrow">Infrastructure</p><h2>Agent health</h2></div><a href="/nodes">Details</a></div>
+      <div class="overview-list">
+        {% for node in nodes %}
+        <a class="node-row" href="/nodes">
+          <span class="status-dot {{ 'node-online' if node.last_seen_at else '' }}"></span>
+          <span><strong>{{ node.display_name or node.id }}</strong><small>{{ node.last_seen_at or 'Never connected' }}</small></span>
+          <span class="badge {{ 'success' if node.enabled and node.last_seen_at else 'warning' }}">{{ 'Enabled' if node.enabled else 'Disabled' }}</span>
+        </a>
+        {% else %}<div class="empty-state">No agents registered.</div>{% endfor %}
+      </div>
+    </section>
+  </aside>
+</section>
+
+<section class="stats compact-stats secondary-stats">
+  <a class="stat stat-link" href="/mailboxes"><span>Synced mailboxes</span><strong>{{ mailbox_count }}</strong></a>
+  <a class="stat stat-link" href="/mailboxes?policy=__assigned__"><span>Explicit policy assignments</span><strong>{{ assigned_policy_count }}</strong></a>
+  <a class="stat stat-link" href="/candidates"><span>Open candidates</span><strong>{{ open_candidates }}</strong></a>
+  <a class="stat stat-link" href="/reputation?level=high"><span>High-risk domains</span><strong>{{ high_risk_domains }}</strong></a>
+  <a class="stat stat-link" href="/blocks"><span>Active IP blocks</span><strong>{{ latest_snapshot.active_ip_blocks|length if latest_snapshot else 0 }}</strong></a>
+  <a class="stat stat-link" href="/blocks"><span>Blocked domains</span><strong>{{ latest_snapshot.blocked_domains_and_subdomains|length if latest_snapshot else 0 }}</strong></a>
+</section>
+
+<section class="overview-secondary">
+  <details class="section-disclosure">
+    <summary>Recent Edge analyzer events</summary>
+    <div class="disclosure-body"><div class="table-scroll"><table>
+      <thead><tr><th>Time UTC</th><th>Action</th><th>Mode</th><th>IP</th><th>Domain</th></tr></thead>
+      <tbody>{% for event in recent_events %}<tr><td class="nowrap">{{ event.timestamp_utc }}</td><td>{{ event.action }}</td><td>{{ event.mode or '—' }}</td><td>{{ event.client_ip or '—' }}</td><td>{{ event.sender_domain or '—' }}</td></tr>{% else %}<tr><td colspan="5" class="empty-state">No events received from the Edge agent.</td></tr>{% endfor %}</tbody>
+    </table></div></div>
+  </details>
+
+  <details class="section-disclosure">
+    <summary>External reputation findings</summary>
+    <div class="disclosure-body"><div class="table-scroll"><table>
+      <thead><tr><th>Domain</th><th>Risk</th><th>Score</th><th>Inbound</th><th>Outbound</th><th>Recommendation</th></tr></thead>
+      <tbody>{% for record in recent_reputation %}<tr><td><a href="/reputation/{{ record.id }}"><strong>{{ record.domain }}</strong></a></td><td><span class="badge risk-{{ record.risk_level }}">{{ record.risk_level }}</span></td><td>{{ record.risk_score }}</td><td>{{ record.inbound_count }}</td><td>{{ record.outbound_count }}</td><td>{{ record.recommendation }}</td></tr>{% else %}<tr><td colspan="6" class="empty-state">No reputation data yet.</td></tr>{% endfor %}</tbody>
+    </table></div></div>
+  </details>
+</section>
+{% endblock %}

@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+set -euo pipefail
+umask 077
+cd "$(dirname "$0")/.."
+if [[ -e .env ]]; then
+  echo ".env already exists; refusing to overwrite" >&2
+  exit 1
+fi
+postgres_password="$(openssl rand -hex 32)"
+session_secret="$(openssl rand -hex 48)"
+node_secret="$(openssl rand -hex 48)"
+mailbox_node_secret="$(openssl rand -hex 48)"
+admin_password="$(openssl rand -hex 18)"
+tracking_mysql_password="$(openssl rand -hex 32)"
+tracking_mysql_root_password="$(openssl rand -hex 32)"
+cat > .env <<ENV
+POSTGRES_DB=exchange_guard
+POSTGRES_USER=exchange_guard
+POSTGRES_PASSWORD=${postgres_password}
+DATABASE_URL=postgresql+psycopg://exchange_guard:${postgres_password}@db:5432/exchange_guard
+SESSION_SECRET=${session_secret}
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=${admin_password}
+BOOTSTRAP_NODE_ID=edge-01
+BOOTSTRAP_NODE_SECRET=${node_secret}
+MAILBOX_NODE_ID=mailbox-01
+MAILBOX_NODE_SECRET=${mailbox_node_secret}
+BLOCKED_OUTBOUND_GROUP=Blocked-Outbound-Senders@example.com
+SECURE_COOKIES=false
+TRUSTED_HOSTS=localhost,127.0.0.1,exchange-guard.example.internal
+COMMAND_TTL_MINUTES=60
+BIND_ADDRESS=127.0.0.1
+WEB_PORT=8787
+REPUTATION_ENABLED=false
+REPUTATION_SCAN_INTERVAL_MINUTES=30
+REPUTATION_LOOKBACK_DAYS=7
+REPUTATION_CACHE_HOURS=24
+REPUTATION_MAX_DOMAINS=300
+REPUTATION_MAX_CHECKS_PER_RUN=50
+REPUTATION_MAX_OUTBOUND_ROWS=20000
+REPUTATION_MAX_SOURCE_IPS=3
+REPUTATION_RDAP_ENABLED=true
+OUTBOUND_MONITOR_ENABLED=false
+OUTBOUND_SCAN_INTERVAL_MINUTES=15
+OUTBOUND_LOOKBACK_HOURS=24
+OUTBOUND_MAX_ROWS=20000
+OUTBOUND_EVENT_IDS=SENDEXTERNAL
+OUTBOUND_DIRECTIONALITY=Originating
+OUTBOUND_INITIAL_BULK_SENDERS=
+OUTBOUND_ALERT_RECIPIENTS_5M=30
+OUTBOUND_CRITICAL_RECIPIENTS_10M=75
+OUTBOUND_DAILY_WARNING=350
+OUTBOUND_DAILY_CRITICAL=450
+ORGANIZATION_DOMAINS=example.com
+INBOUND_SPOOF_MONITOR_ENABLED=false
+INBOUND_SPOOF_SCAN_INTERVAL_MINUTES=15
+INBOUND_SPOOF_LOOKBACK_DAYS=7
+INBOUND_SPOOF_LOOKBACK_HOURS=24
+INBOUND_SPOOF_MAX_ROWS=20000
+INBOUND_SPOOF_CRITICAL_ACCEPTED=10
+INBOUND_SPOOF_INITIAL_TRUSTED_IPS=
+INBOUND_GEOIP_ENABLED=true
+INBOUND_GEOIP_API_URL=https://ipwho.is/{ip}
+INBOUND_GEOIP_PROXY_URL=
+INBOUND_GEOIP_CACHE_DAYS=30
+INBOUND_GEOIP_MAX_LOOKUPS_PER_SCAN=8
+INBOUND_GEOIP_MAX_LOOKUPS_PER_DAY=900
+INBOUND_AUTO_BLOCK_OUTSIDE_ALLOWED_COUNTRIES=false
+INBOUND_AUTO_BLOCK_ALLOWED_COUNTRIES=
+INBOUND_AUTO_BLOCK_HOURS=24
+INBOUND_AUTO_BLOCK_MAX_PER_SCAN=5
+INBOUND_AUTO_BLOCK_MIN_ACCEPTED=1
+TELEGRAM_ENABLED=false
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_CHAT_ID=
+TELEGRAM_ALLOWED_USER_IDS=
+TELEGRAM_PROXY_URL=
+TELEGRAM_LONG_POLL_SECONDS=25
+TELEGRAM_ACTION_TTL_MINUTES=60
+EXCHANGE_MYSQL_HOST=127.0.0.1
+EXCHANGE_MYSQL_PORT=3306
+EXCHANGE_MYSQL_SOCKET=
+EXCHANGE_MYSQL_DATABASE=exchange_monitoring
+EXCHANGE_MYSQL_USER=exchange_guard_tracking
+EXCHANGE_MYSQL_PASSWORD=${tracking_mysql_password}
+TRACKING_MYSQL_ROOT_PASSWORD=${tracking_mysql_root_password}
+SPAMHAUS_DQS_KEY=
+ABUSEIPDB_API_KEY=
+VIRUSTOTAL_API_KEY=
+ENV
+chmod 600 .env
+cat > bootstrap-secrets.txt <<SECRETS
+Admin username: admin
+Admin password: ${admin_password}
+Edge node id: edge-01
+Edge shared secret: ${node_secret}
+Mailbox node id: mailbox-01
+Mailbox shared secret: ${mailbox_node_secret}
+SECRETS
+chmod 600 bootstrap-secrets.txt
+echo "Created .env and bootstrap-secrets.txt with mode 600"

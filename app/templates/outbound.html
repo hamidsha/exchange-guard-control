@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="signal-desk">
+  <aside class="sender-directory" aria-label="Outbound sender list">
+    <div class="directory-head">
+      <div><p class="eyebrow">Live transport intelligence</p><h2>Outbound senders</h2></div>
+      {% if user.role.value == 'admin' %}<form method="post" action="/outbound/scan"><input type="hidden" name="csrf" value="{{ csrf_token }}"><button class="compact secondary" type="submit">Scan now</button></form>{% endif %}
+    </div>
+    {% if latest_run and latest_run.status == 'failed' %}<div class="alert danger desk-alert"><strong>Last scan failed:</strong> {{ latest_run.error }}</div>{% endif %}
+    {% if latest_run and latest_run.rows_capped %}<div class="alert warning desk-alert">Latest {{ latest_run.rows_read }} rows were scanned; the configured cap was reached.</div>{% endif %}
+    <form class="directory-filter" method="get" action="/outbound">
+      <label class="sr-only" for="sender-search">Search sender</label><input id="sender-search" name="q" value="{{ filters.q }}" placeholder="Search mailbox or address">
+      <select name="risk" aria-label="Risk filter"><option value="">All activity</option>{% for level in ['critical','high','medium','low','expected','bulk'] %}<option value="{{ level }}" {% if filters.risk == level %}selected{% endif %}>{{ level|capitalize }} ({{ counts[level] }})</option>{% endfor %}</select>
+      <button type="submit">Filter</button>
+    </form>
+    <div class="risk-summary" aria-label="Risk summary"><span><b class="risk-dot critical"></b>{{ counts.critical }} critical</span><span><b class="risk-dot high"></b>{{ counts.high }} high</span><span><b class="risk-dot safe"></b>{{ counts.low }} low</span></div>
+    <div class="sender-list">
+      {% for r in records %}
+      <a class="sender-card {{ 'selected' if selected and selected.sender == r.sender else '' }} risk-edge-{{ r.risk_level }}" href="/outbound?sender={{ r.sender|urlencode }}{% if filters.q %}&q={{ filters.q|urlencode }}{% endif %}{% if filters.risk %}&risk={{ filters.risk|urlencode }}{% endif %}">
+        <span class="sender-avatar">{{ r.sender[:1]|upper }}</span>
+        <span class="sender-card-main"><strong>{{ r.sender }}</strong><small>{{ r.messages_24h }} messages · {{ r.unique_recipients_24h }} addresses</small></span>
+        <span class="sender-card-side"><span class="badge risk-{{ r.risk_level }}">{{ r.risk_level }}</span><strong>{{ r.recipients_24h }}</strong><small>24h</small></span>
+      </a>
+      {% else %}<div class="empty-state">No sender activity matches this filter.</div>{% endfor %}
+    </div>
+    <div class="directory-foot"><span>Last scan</span><strong>{{ latest_run.finished_at if latest_run and latest_run.finished_at else 'Never' }}</strong><small>Final Edge delivery · Originating · external recipients only</small></div>
+  </aside>
+
+  <section class="investigation-workspace">
+    {% if selected %}
+    <header class="subject-header">
+      <div class="subject-identity"><span class="subject-avatar">{{ (selected_mailbox.display_name if selected_mailbox and selected_mailbox.display_name else selected.sender)[:1]|upper }}</span><div><div class="identity-line"><h2>{{ selected_mailbox.display_name if selected_mailbox and selected_mailbox.display_name else selected.sender.split('@')[0] }}</h2><span class="badge risk-{{ selected.risk_level }}">{{ selected.risk_level }}</span></div><p>{{ selected.sender }}</p></div></div>
+      <div class="subject-actions">
+        <a class="button ghost" href="/mailboxes?q={{ selected.sender|urlencode }}">Mailbox record</a>
+        {% if user.role.value == 'admin' %}
+          {% if selected_profile and selected_profile.profile_type == 'expected' %}<form method="post" action="/outbound/expected-profiles/remove"><input type="hidden" name="csrf" value="{{ csrf_token }}"><input type="hidden" name="sender" value="{{ selected.sender }}"><button class="secondary" type="submit">Remove expected</button></form>
+          {% elif not selected_profile %}<form method="post" action="/outbound/expected-profiles"><input type="hidden" name="csrf" value="{{ csrf_token }}"><input type="hidden" name="sender" value="{{ selected.sender }}"><input type="hidden" name="note" value="Expected business activity"><button class="secondary" type="submit">Mark expected</button></form>{% endif %}
+          <button class="danger" type="button" data-quarantine="{{ selected.sender }}">Quarantine</button>
+        {% endif %}
+      </div>
+    </header>
+
+    <section class="profile-strip" aria-label="Mailbox status">
+      <div><span>Mailbox type</span><strong>{{ selected_mailbox.recipient_type if selected_mailbox else 'Not in inventory' }}</strong></div>
+      <div><span>Throttle policy</span><strong>{{ selected_mailbox.current_policy if selected_mailbox and selected_mailbox.current_policy else 'Organization default' }}</strong></div>
+      <div><span>EWS</span><strong>{{ selected_state.ews }}</strong></div>
+      <div><span>Incident</span><strong>{{ selected_incident.status.value if selected_incident else 'None' }}</strong></div>
+      <div><span>Last authentication</span><strong>{{ selected_state.last_authentication }}</strong></div>
+      <div><span>Latest transport source</span><strong>{{ selected_state.transport_source_ip }}</strong></div>
+    </section>
+    {% if selected_profile %}<div class="profile-note"><span class="badge risk-{{ selected_profile.profile_type }}">{{ selected_profile.profile_type }}</span><strong>Approved profile</strong><span>{{ selected_profile.note or 'No note' }}</span></div>{% endif %}
+
+    <section class="metrics-grid" aria-label="Selected sender metrics">
+      <article><span>External deliveries</span><strong>{{ selected.recipients_24h }}</strong><small>last 24 hours</small></article><article><span>Unique messages</span><strong>{{ selected.messages_24h }}</strong><small>last 24 hours</small></article><article><span>Unique addresses</span><strong>{{ selected.unique_recipients_24h }}</strong><small>external recipients</small></article><article><span>External domains</span><strong>{{ selected.unique_domains_24h }}</strong><small>last 24 hours</small></article><article><span>Deliveries in 1h</span><strong>{{ selected.recipients_1h }}</strong><small>recent velocity</small></article><article><span>Deliveries in 10m</span><strong>{{ selected.recipients_10m }}</strong><small>burst window</small></article>
+    </section>
+
+    <section class="activity-card">
+      <div class="section-title"><div><p class="eyebrow">Delivery velocity</p><h3>24-hour activity</h3></div><div class="chart-legend"><span><b class="legend-bar normal"></b>Normal</span><span><b class="legend-bar anomaly"></b>Anomaly</span></div></div>
+      <div class="chart-shell"><svg id="sender-activity-chart" role="img" aria-labelledby="activity-chart-title activity-chart-desc" viewBox="0 0 960 250" preserveAspectRatio="none"><title id="activity-chart-title">Hourly external deliveries for {{ selected.sender }}</title><desc id="activity-chart-desc">A 24-hour bar chart. Red bars indicate volumes well above this sender's recent baseline.</desc></svg></div>
+      <script id="sender-chart-data" type="application/json">{{ chart_data|tojson }}</script>
+    </section>
+
+    <section class="evidence-card">
+      <div class="desk-tabs" role="tablist" aria-label="Sender investigation details">
+        <button class="desk-tab active" type="button" role="tab" aria-selected="true" data-tab="evidence">Evidence <span>{{ evidence|length }}</span></button><button class="desk-tab" type="button" role="tab" aria-selected="false" data-tab="attachments">Attachments <span>{{ attachment_summary.files }}</span></button><button class="desk-tab" type="button" role="tab" aria-selected="false" data-tab="recipients">External recipients <span>{{ selected.unique_recipients_24h }}</span></button><button class="desk-tab" type="button" role="tab" aria-selected="false" data-tab="domains">External domains <span>{{ selected.unique_domains_24h }}</span></button><button class="desk-tab" type="button" role="tab" aria-selected="false" data-tab="authentication">Authentication</button>
+      </div>
+      <div class="desk-tab-panel active" role="tabpanel" data-panel="evidence">
+        <div class="table-scroll"><table class="evidence-table"><thead><tr><th>Time</th><th>Subject</th><th>Recipients</th><th>Size</th><th>Attachments</th><th>Transport source</th></tr></thead><tbody>
+        {% for item in evidence %}<tr><td class="nowrap">{{ item.event_timestamp }}</td><td><strong>{{ item.subject or '(No subject)' }}</strong><small>{{ item.message_id or 'No message id' }}</small></td><td><strong>{{ item.recipient_count }}</strong>{% if item.recipients %}<small>{{ item.recipients[:3]|join(', ') }}{% if item.recipients|length > 3 %} +{{ item.recipients|length - 3 }}{% endif %}</small>{% endif %}</td><td>{{ item.total_bytes }} B</td><td>{% if item.attachment_status == 'present' %}<span class="attachment-state present">{{ item.attachments|length }} file(s)</span>{% elif item.attachment_status == 'none' %}<span class="attachment-state none">No attachments</span>{% else %}<span class="attachment-state unavailable">Not collected</span>{% endif %}</td><td>{{ item.transport_source_ip or '—' }}</td></tr>
+        {% else %}<tr><td colspan="6" class="empty-state">Evidence will appear after the next outbound scan.</td></tr>{% endfor %}</tbody></table></div>
+      </div>
+      <div class="desk-tab-panel" role="tabpanel" data-panel="attachments" hidden>
+        <div class="attachment-summary"><article><span>Files observed</span><strong>{{ attachment_summary.files }}</strong></article><article><span>Messages with files</span><strong>{{ attachment_summary.present }}</strong></article><article><span>Confirmed without files</span><strong>{{ attachment_summary.none }}</strong></article><article><span>Metadata not collected</span><strong>{{ attachment_summary.unavailable }}</strong></article></div>
+        {% if attachment_items %}<div class="table-scroll"><table><thead><tr><th>File</th><th>Type</th><th>Size</th><th>Message</th><th>Review</th></tr></thead><tbody>{% for item in attachment_items %}<tr><td><strong>{{ item.filename }}</strong></td><td>{{ item.content_type or item.extension or 'Unknown' }}</td><td>{{ item.size_bytes }} B</td><td>{{ item.subject or '(No subject)' }}<small>{{ item.event_timestamp }}</small></td><td><span class="badge {{ 'danger' if item.review_required else 'neutral' }}">{{ 'Review attachment' if item.review_required else 'Metadata only' }}</span></td></tr>{% endfor %}</tbody></table></div>
+        {% else %}<div class="collection-state"><strong>Attachment metadata is not available for this sender.</strong><p>Exchange message-tracking logs do not include filenames. The new signed metadata endpoint can enrich this panel without storing message bodies.</p></div>{% endif %}
+      </div>
+      <div class="desk-tab-panel" role="tabpanel" data-panel="recipients" hidden><div class="rank-list">{% for address, count in top_recipients %}<div><strong>{{ address }}</strong><span>{{ count }} event(s)</span></div>{% else %}<p class="empty-state">Recipient addresses were not available in collected evidence.</p>{% endfor %}</div></div>
+      <div class="desk-tab-panel" role="tabpanel" data-panel="domains" hidden><div class="rank-list">{% for domain, count in top_domains %}<div><strong>{{ domain }}</strong><span>{{ count }} event(s)</span></div>{% else %}<p class="empty-state">No external domains are available.</p>{% endfor %}</div></div>
+      <div class="desk-tab-panel" role="tabpanel" data-panel="authentication" hidden><div class="collection-state"><strong>Authentication telemetry is not collected by the current least-privilege agent.</strong><p>The transport source shown above comes from message tracking and must not be interpreted as the user's authentication IP.</p></div></div>
+    </section>
+
+    <section class="secondary-section">
+      <details class="section-disclosure" id="incidents"><summary>Incident history and response queue ({{ incidents|length }})</summary><div class="disclosure-body"><div class="table-scroll"><table><thead><tr><th>Created</th><th>Mailbox</th><th>Status</th><th>Reason</th><th>By</th><th>Action</th></tr></thead><tbody>{% for i in incidents %}<tr><td>{{ i.created_at }}</td><td><strong>{{ i.primary_smtp_address }}</strong></td><td><span class="badge {{ 'success' if i.status.value == 'released' else 'danger' if i.status.value in ['failed','partial'] else 'warning' }}">{{ i.status.value }}</span></td><td>{{ i.reason }}</td><td>{{ i.created_by }}</td><td>{% if user.role.value == 'admin' and i.status.value in ['quarantined','partial','failed'] %}<form method="post" action="/incidents/{{ i.id }}/release"><input type="hidden" name="csrf" value="{{ csrf_token }}"><input name="confirmation" placeholder="{{ i.primary_smtp_address }}" required><button class="secondary" type="submit">Release</button></form>{% else %}—{% endif %}</td></tr>{% else %}<tr><td colspan="6" class="empty-state">No incidents.</td></tr>{% endfor %}</tbody></table></div></div></details>
+      <details class="section-disclosure"><summary>Approved bulk senders ({{ bulk_profiles|length }})</summary><div class="disclosure-body">{% if user.role.value == 'admin' %}<form method="post" action="/outbound/bulk-profiles" class="filter-bar"><input type="hidden" name="csrf" value="{{ csrf_token }}"><label>Internal mailbox<input name="sender" type="email" required></label><label class="grow">Business reason<input name="note" placeholder="Approved CRM sender"></label><button type="submit">Add bulk profile</button></form>{% endif %}<div class="table-scroll"><table><thead><tr><th>Sender</th><th>24h deliveries</th><th>Messages</th><th>Note</th><th>Action</th></tr></thead><tbody>{% for p in bulk_profiles %}{% set r = bulk_usage.get(p.sender) %}<tr><td><strong>{{ p.sender }}</strong></td><td>{{ r.recipients_24h if r else 0 }}</td><td>{{ r.messages_24h if r else 0 }}</td><td>{{ p.note or '—' }}</td><td>{% if user.role.value == 'admin' %}<form method="post" action="/outbound/bulk-profiles/remove"><input type="hidden" name="csrf" value="{{ csrf_token }}"><input type="hidden" name="sender" value="{{ p.sender }}"><button class="secondary" type="submit">Return to normal</button></form>{% else %}—{% endif %}</td></tr>{% else %}<tr><td colspan="5" class="empty-state">No approved bulk senders.</td></tr>{% endfor %}</tbody></table></div></div></details>
+      <details class="section-disclosure"><summary>Telegram alerts and recent audit</summary><div class="disclosure-body"><div class="table-scroll"><table><thead><tr><th>Created</th><th>Sender / target</th><th>Status / action</th><th>Actor</th></tr></thead><tbody>{% for a in telegram_alerts[:20] %}<tr><td>{{ a.created_at }}</td><td>{{ a.sender }}</td><td>{{ a.status }}</td><td>{{ a.acted_by or 'Telegram' }}</td></tr>{% endfor %}{% for item in recent_audit %}<tr><td>{{ item.timestamp_utc }}</td><td>{{ item.target or '—' }}</td><td>{{ item.action }}</td><td>{{ item.actor }}</td></tr>{% endfor %}</tbody></table></div></div></details>
+    </section>
+    {% else %}<div class="investigation-empty"><strong>No sender selected</strong><p>Run an outbound scan or clear the current filters.</p></div>{% endif %}
+  </section>
+</div>
+
+{% if user.role.value == 'admin' %}<dialog id="quarantine-dialog"><div class="dialog-head"><div><h2>Quarantine mailbox</h2><p>Disable EWS, block outbound delivery and purge the current Edge queue.</p></div><button class="ghost" type="button" data-dialog-close>Close</button></div><form method="post" action="/incidents/quarantine" class="dialog-body"><input type="hidden" name="csrf" value="{{ csrf_token }}"><label>Mailbox<input id="quarantine-address" name="primary_smtp_address" type="email" required></label><label>Incident reason<input name="reason" value="Suspected compromised credentials / outbound spam" required></label><label>Confirm exact mailbox address<input id="quarantine-confirmation" name="confirmation" required></label><div class="alert warning">This affects live mail flow and is recorded in the audit log.</div><div class="dialog-actions"><button class="ghost" type="button" data-dialog-close>Cancel</button><button class="danger" type="submit">Queue quarantine</button></div></form></dialog>{% endif %}
+
+<script>
+(() => {
+  const dialog = document.getElementById('quarantine-dialog');
+  const address = document.getElementById('quarantine-address');
+  const confirmation = document.getElementById('quarantine-confirmation');
+  document.querySelectorAll('[data-quarantine]').forEach((button) => button.addEventListener('click', () => { if (!dialog) return; address.value = button.dataset.quarantine; confirmation.value = button.dataset.quarantine; dialog.showModal(); }));
+  document.querySelectorAll('[data-dialog-close]').forEach((button) => button.addEventListener('click', () => dialog && dialog.close()));
+  if (dialog) dialog.addEventListener('click', (event) => { if (event.target === dialog) dialog.close(); });
+  const tabs = [...document.querySelectorAll('.desk-tab')];
+  const panels = [...document.querySelectorAll('.desk-tab-panel')];
+  tabs.forEach((tab) => tab.addEventListener('click', () => { tabs.forEach((item) => { item.classList.remove('active'); item.setAttribute('aria-selected', 'false'); }); panels.forEach((panel) => { panel.classList.remove('active'); panel.hidden = true; }); tab.classList.add('active'); tab.setAttribute('aria-selected', 'true'); const panel = panels.find((item) => item.dataset.panel === tab.dataset.tab); if (panel) { panel.hidden = false; panel.classList.add('active'); } }));
+  const chart = document.getElementById('sender-activity-chart');
+  const dataNode = document.getElementById('sender-chart-data');
+  if (chart && dataNode) {
+    const values = JSON.parse(dataNode.textContent || '[]');
+    const width = 960, height = 250, left = 42, top = 18, bottom = 34;
+    const plotHeight = height - top - bottom;
+    const maxValue = Math.max(1, ...values.map((item) => item.recipients));
+    const ns = 'http://www.w3.org/2000/svg';
+    const add = (name, attrs, text) => { const node = document.createElementNS(ns, name); Object.entries(attrs).forEach(([key, value]) => node.setAttribute(key, value)); if (text !== undefined) node.textContent = text; chart.appendChild(node); return node; };
+    [0, .25, .5, .75, 1].forEach((ratio) => { const y = top + plotHeight - (plotHeight * ratio); add('line', {x1:left, y1:y, x2:width - 12, y2:y, class:'chart-grid-line'}); add('text', {x:6, y:y + 4, class:'chart-axis-label'}, String(Math.round(maxValue * ratio))); });
+    const available = width - left - 18;
+    const step = available / Math.max(1, values.length);
+    values.forEach((item, index) => { const barHeight = (item.recipients / maxValue) * plotHeight; const x = left + (index * step) + (step * .18); const y = top + plotHeight - barHeight; const bar = add('rect', {x, y, width:Math.max(3, step * .64), height:Math.max(1, barHeight), rx:2, class:item.anomaly ? 'chart-bar anomaly' : 'chart-bar normal'}); const title = document.createElementNS(ns, 'title'); title.textContent = `${item.label}: ${item.recipients} deliveries, ${item.messages} messages`; bar.appendChild(title); if (index % 3 === 0) add('text', {x:x + step * .3, y:height - 11, class:'chart-axis-label chart-x-label'}, item.label); });
+  }
+})();
+</script>
+{% endblock %}

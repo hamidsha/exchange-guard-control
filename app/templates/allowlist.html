@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block content %}
+{% if user.role.value == 'admin' %}
+<div class="card narrow"><h2>Add allowlist entry</h2>
+<form method="post" action="/allowlist">
+<input type="hidden" name="csrf" value="{{ csrf_token }}">
+<label>Type<select name="entry_type"><option value="ip">IP</option><option value="domain">Domain</option></select></label>
+<label>Value<input name="value" required></label>
+<label>Comment<input name="comment"></label>
+<button type="submit">Add and sync</button>
+</form></div>
+{% endif %}
+<div class="card table-card"><div class="table-title"><div><p class="eyebrow">Protected exceptions</p><h2>Allowlist entries</h2></div></div><div class="table-scroll"><table><thead><tr><th>Type</th><th>Value</th><th>Comment</th><th>Created by</th><th>Action</th></tr></thead><tbody>
+{% for e in entries %}<tr><td>{{ e.entry_type }}</td><td>{{ e.value }}</td><td>{{ e.comment or '-' }}</td><td>{{ e.created_by }}</td><td>{% if user.role.value == 'admin' %}<form method="post" action="/allowlist/{{ e.id }}/delete" class="inline-form"><input type="hidden" name="csrf" value="{{ csrf_token }}"><button class="danger" type="submit">Remove</button></form>{% endif %}</td></tr>{% else %}<tr><td colspan="5">No allowlist entries.</td></tr>{% endfor %}
+</tbody></table></div></div>
+{% endblock %}
