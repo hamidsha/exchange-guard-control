@@ -4,6 +4,18 @@ Exchange Guard Control is a self-hosted security control plane for on-premises M
 
 > This is a community project and is not affiliated with or supported by Microsoft. Test every enforcement action in a lab or maintenance window before production use.
 
+## Preview
+
+All values shown below are fictional demo data. No production mailbox, domain, IP address or incident identifier is included.
+
+### Security overview
+
+![Exchange Guard security overview with demo data](docs/images/security-overview-demo.png)
+
+### Outbound triage
+
+![Exchange Guard outbound triage with demo data](docs/images/outbound-triage-demo.png)
+
 ## What it provides
 
 - FastAPI/Jinja web interface with PostgreSQL operational storage.

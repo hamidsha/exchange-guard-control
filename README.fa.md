@@ -1,5 +1,17 @@
 # Exchange Guard Control
 
+## پیش‌نمایش رابط کاربری
+
+تمام مقادیر داخل تصاویر زیر ساختگی و مخصوص نمایش هستند؛ هیچ Mailbox، دامنه، IP یا شناسهٔ رخداد واقعی در آن‌ها وجود ندارد.
+
+### نمای کلی امنیت
+
+![نمای کلی امنیت Exchange Guard با داده‌های نمایشی](docs/images/security-overview-demo.png)
+
+### بررسی ارسال‌های خروجی
+
+![صفحه Outbound Triage در Exchange Guard با داده‌های نمایشی](docs/images/outbound-triage-demo.png)
+
 Exchange Guard Control یک کنترل‌پلین Self-hosted برای Exchange On-premises است. این پروژه مدیریت Block/Allowlist روی Edge، موجودی Mailboxها، تخصیص Throttling Policy، قرنطینه حساب، پایش ارسال خروجی، کشف جعل دامنه داخلی، GeoIP، هشدار Telegram و Audit کامل را در یک رابط وب جمع می‌کند.
 
 > این پروژه Community است و وابستگی یا پشتیبانی رسمی از طرف Microsoft ندارد. تمام عملیات Enforce را ابتدا در محیط آزمایش یا Maintenance Window بررسی کنید.
@@ -15,7 +27,7 @@ Exchange Guard Control یک کنترل‌پلین Self-hosted برای Exchange 
 ## نصب سریع
 
 ```bash
-git clone https://github.com/hamidsha/exchange-guard-control.git
+git clone https://github.com/YOUR_ACCOUNT/exchange-guard-control.git
 cd exchange-guard-control
 ./scripts/generate-env.sh
 ```
