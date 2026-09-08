@@ -15,7 +15,7 @@ Exchange Guard Control یک کنترل‌پلین Self-hosted برای Exchange 
 ## نصب سریع
 
 ```bash
-git clone https://github.com/YOUR_ACCOUNT/exchange-guard-control.git
+git clone https://github.com/hamidsha/exchange-guard-control.git
 cd exchange-guard-control
 ./scripts/generate-env.sh
 ```

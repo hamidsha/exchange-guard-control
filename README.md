@@ -42,7 +42,7 @@ The Edge agent can run standalone for manual IP/domain control. Candidate ingest
 ## Quick start
 
 ```bash
-git clone https://github.com/YOUR_ACCOUNT/exchange-guard-control.git
+git clone https://github.com/hamidsha/exchange-guard-control.git
 cd exchange-guard-control
 ./scripts/generate-env.sh
 ```

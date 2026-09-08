@@ -7,7 +7,7 @@
 پیش‌نیازها: Docker Engine، Docker Compose v2، حداقل ۲ هسته CPU، حدود ۲ گیگابایت RAM و یک نام DNS داخلی با TLS معتبر برای محیط عملیاتی.
 
 ```bash
-git clone https://github.com/YOUR_ACCOUNT/exchange-guard-control.git
+git clone https://github.com/hamidsha/exchange-guard-control.git
 cd exchange-guard-control
 chmod +x scripts/*.sh
 ./scripts/generate-env.sh

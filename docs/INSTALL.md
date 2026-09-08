@@ -29,7 +29,7 @@ Optional traffic analytics:
 Clone the repository or extract a release archive:
 
 ```bash
-git clone https://github.com/YOUR_ACCOUNT/exchange-guard-control.git
+git clone https://github.com/hamidsha/exchange-guard-control.git
 cd exchange-guard-control
 chmod +x scripts/*.sh
 ./scripts/generate-env.sh
